@@ -12,43 +12,12 @@ import (
 
 var ZeroAddress = common.HexToAddress("0x0000000000000000000000000000000000000000")
 
-type ovmTransaction struct {
-	Timestamp     *big.Int       `json:"timestamp"`
-	BlockNumber   *big.Int       `json:"blockNumber"`
-	L1QueueOrigin uint8          `json:"l1QueueOrigin"`
-	L1TxOrigin    common.Address `json:"l1TxOrigin"`
-	Entrypoint    common.Address `json:"entrypoint"`
-	GasLimit      *big.Int       `json:"gasLimit"`
-	Data          []uint8        `json:"data"`
-}
-
 func toExecutionManagerRun(evm *vm.EVM, msg Message) (Message, error) {
-	tx := ovmTransaction{
-		evm.Context.Time,
-		msg.L1BlockNumber(),
-		uint8(msg.QueueOrigin()),
-		*msg.L1MessageSender(),
-		*msg.To(),
-		big.NewInt(int64(msg.Gas())),
-		msg.Data(),
-	}
-
-	var abi = evm.Context.OvmExecutionManager.ABI
-	var args = []interface{}{
-		tx,
-		evm.Context.OvmStateManager.Address,
-	}
-
-	ret, err := abi.Pack("run", args...)
-	if err != nil {
-		return nil, err
-	}
-
 	outputmsg, err := modMessage(
 		msg,
 		msg.From(),
-		&evm.Context.OvmExecutionManager.Address,
-		ret,
+		msg.To(),
+		msg.Data(),
 		evm.Context.GasLimit,
 	)
 	if err != nil {
@@ -82,8 +51,8 @@ func AsOvmMessage(tx *types.Transaction, signer types.Signer, decompressor commo
 	outmsg, err := modMessage(
 		msg,
 		msg.From(),
-		&decompressor,
-		tx.GetMeta().RawTransaction,
+		msg.To(),
+		msg.Data(),
 		gasLimit,
 	)
 
@@ -95,44 +64,11 @@ func AsOvmMessage(tx *types.Transaction, signer types.Signer, decompressor commo
 }
 
 func EncodeSimulatedMessage(msg Message, timestamp, blockNumber *big.Int, executionManager, stateManager dump.OvmDumpAccount) (Message, error) {
-	to := msg.To()
-	if to == nil {
-		to = &common.Address{0}
-	}
-
-	value := msg.Value()
-	if value == nil {
-		value = common.Big0
-	}
-
-	tx := ovmTransaction{
-		timestamp,
-		blockNumber,
-		uint8(msg.QueueOrigin()),
-		*msg.L1MessageSender(),
-		*to,
-		new(big.Int).SetUint64(msg.Gas()),
-		msg.Data(),
-	}
-
-	from := msg.From()
-	var args = []interface{}{
-		tx,
-		from,
-		value,
-		stateManager.Address,
-	}
-
-	output, err := executionManager.ABI.Pack("simulateMessage", args...)
-	if err != nil {
-		return nil, fmt.Errorf("Cannot pack simulateMessage: %w", err)
-	}
-
 	return modMessage(
 		msg,
-		common.Address{},
-		&executionManager.Address,
-		output,
+		msg.From(),
+		msg.To(),
+		msg.Data(),
 		msg.Gas(),
 	)
 }

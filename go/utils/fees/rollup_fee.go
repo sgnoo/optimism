@@ -22,7 +22,7 @@ const feeScalar uint64 = 10_000_000
 const TxGasPrice uint64 = feeScalar + (feeScalar / 2)
 
 // BigTxGasPrice is the L2GasPrice as type big.Int
-var BigTxGasPrice = new(big.Int).SetUint64(TxGasPrice)
+var BigTxGasPrice = new(big.Int).SetUint64(0)
 var bigFeeScalar = new(big.Int).SetUint64(feeScalar)
 
 const tenThousand = 10000

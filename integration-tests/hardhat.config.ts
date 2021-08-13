@@ -10,6 +10,9 @@ const enableGasReport = !!process.env.ENABLE_GAS_REPORT
 
 const config: HardhatUserConfig = {
   networks: {
+    local: {
+      url: process.env.L2_URL || 'http://localhost:8545',
+    },
     optimism: {
       url: process.env.L2_URL || 'http://localhost:8545',
       ovm: true,

@@ -539,14 +539,9 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	}
 
 	// Ensure the transaction doesn't exceed the current block limit gas.
-	if vm.UsingOVM {
-		if pool.currentMaxGas < tx.L2Gas() {
-			return ErrGasLimit
-		}
-	} else {
-		if pool.currentMaxGas < tx.Gas() {
-			return ErrGasLimit
-		}
+	if pool.currentMaxGas < tx.Gas() {
+		log.Debug("exceeded", "tx", tx.Gas(), "pool", pool.currentMaxGas)
+		return ErrGasLimit
 	}
 
 	// Make sure the transaction is signed properly

@@ -54,7 +54,7 @@ const (
 )
 
 var errOVMUnsupported = errors.New("OVM: Unsupported RPC Method")
-var bigDefaultGasPrice = new(big.Int).SetUint64(defaultGasPrice)
+var bigDefaultGasPrice = new(big.Int).SetUint64(0)
 
 // PublicEthereumAPI provides an API to access Ethereum related information.
 // It offers only methods that operate on public data that is freely available to anyone.
@@ -979,33 +979,7 @@ func (s *PublicBlockChainAPI) Call(ctx context.Context, args CallArgs, blockNrOr
 // transaction calldata
 func DoEstimateGas(ctx context.Context, b Backend, args CallArgs, blockNrOrHash rpc.BlockNumberOrHash, gasCap *big.Int) (hexutil.Uint64, error) {
 	// 1. get the gas that would be used by the transaction
-	gasUsed, err := legacyDoEstimateGas(ctx, b, args, blockNrOrHash, gasCap)
-	if err != nil {
-		return 0, err
-	}
-	// 2a. fetch the data price, depends on how the sequencer has chosen to update their values based on the
-	// l1 gas prices
-	l1GasPrice, err := b.SuggestL1GasPrice(ctx)
-	if err != nil {
-		return 0, err
-	}
-	// 2b. fetch the execution gas price, by the typical mempool dynamics
-	l2GasPrice, err := b.SuggestL2GasPrice(ctx)
-	if err != nil {
-		return 0, err
-	}
-	data := []byte{}
-	if args.Data != nil {
-		data = *args.Data
-	}
-	// 3. calculate the fee using just the calldata. The additional overhead of
-	// RLP encoding is covered inside of EncodeL2GasLimit
-	l2GasLimit := new(big.Int).SetUint64(uint64(gasUsed))
-	fee := fees.EncodeTxGasLimit(data, l1GasPrice, l2GasLimit, l2GasPrice)
-	if !fee.IsUint64() {
-		return 0, fmt.Errorf("estimate gas overflow: %s", fee)
-	}
-	return (hexutil.Uint64)(fee.Uint64()), nil
+	return legacyDoEstimateGas(ctx, b, args, blockNrOrHash, gasCap)
 }
 
 func legacyDoEstimateGas(ctx context.Context, b Backend, args CallArgs, blockNrOrHash rpc.BlockNumberOrHash, gasCap *big.Int) (hexutil.Uint64, error) {

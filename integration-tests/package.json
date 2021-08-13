@@ -12,7 +12,7 @@
     "build:integration": "./scripts/build.sh",
     "build:contracts": "hardhat compile",
     "build:contracts:ovm": "hardhat compile --network optimism",
-    "test:integration": "hardhat --network optimism test",
+    "test:integration": "hardhat test --network local",
     "test:integration:live": "IS_LIVE_NETWORK=true hardhat --network optimism-live test",
     "test:sync": "hardhat --network optimism test sync-tests/*.spec.ts --no-compile",
     "clean": "rimraf cache artifacts artifacts-ovm cache-ovm"

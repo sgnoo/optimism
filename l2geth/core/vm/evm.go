@@ -17,7 +17,6 @@
 package vm
 
 import (
-	"bytes"
 	"fmt"
 	"math/big"
 	"strings"
@@ -119,21 +118,6 @@ func run(evm *EVM, contract *Contract, input []byte, readOnly bool) ([]byte, err
 		// Only log for non `eth_call`s
 		if evm.Context.EthCallSender == nil {
 			log.Debug("Calling contract", "Address", contract.Address().Hex(), "Data", hexutil.Encode(input))
-		}
-
-		// Uncomment to make Safety checker always returns true.
-		// if contract.Address() == evm.Context.SafetyChecker.Address {
-		//     return AbiBytesTrue, nil
-		// }
-
-		// If we're calling the state manager, we want to use our native implementation instead.
-		if contract.Address() == evm.Context.OvmStateManager.Address {
-			// The caller must be the execution manager
-			if contract.Caller() != evm.Context.OvmExecutionManager.Address {
-				log.Error("StateManager called by non ExecutionManager", "caller", contract.Caller().Hex())
-				return nil, ErrOvmSandboxEscape
-			}
-			return callStateManager(input, evm, contract)
 		}
 	}
 
@@ -323,19 +307,6 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 		}
 	}
 
-	// We need to be able to show a status of 1 ("no error") for successful L1 => L2 messages.
-	// The current way we figure out the success of the transaction (by parsing the
-	// returned data) would require an upgrade to the contracts that we likely won't make for a
-	// while. As a result, we'll use this mechanism where we set IsL1ToL2Message = true if
-	// we detect an L1 => L2 message and then IsSuccessfulL1ToL2Message = true if the message is
-	// successfully executed.
-	// Just to be safe (if the evm object ever gets reused), we set both values to false on the
-	// start of a new EVM execution.
-	if evm.depth == 0 {
-		evm.Context.IsL1ToL2Message = false
-		evm.Context.IsSuccessfulL1ToL2Message = false
-	}
-
 	var (
 		to       = AccountRef(addr)
 		snapshot = evm.StateDB.Snapshot()
@@ -382,34 +353,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 		}()
 	}
 
-	// Here's where we detect L1 => L2 messages. Based on the current contracts, we're guaranteed
-	// that the target address will only be the OVM_L2CrossDomainMessenger at a depth of 1 if this
-	// is an L1 => L2 message.
-	if evm.depth == 1 && addr == evm.Context.OvmL2CrossDomainMessenger.Address {
-		evm.Context.IsL1ToL2Message = true
-	}
-
 	ret, err = run(evm, contract, input, false)
-
-	// If all of these very particular conditions hold then we're guaranteed to be in a successful
-	// L1 => L2 message. It's not pretty, but it works. Broke this out into a series of checks to
-	// make it a bit more legible.
-	if evm.Context.IsL1ToL2Message && evm.depth == 3 {
-		var isValidMessageTarget = true
-		// 0x420... addresses are not valid targets except for the ETH predeploy.
-		if bytes.HasPrefix(addr.Bytes(), fortyTwoPrefix) && addr != evm.Context.OvmL2StandardBridge.Address {
-			isValidMessageTarget = false
-		}
-		// 0xdead... addresses are not valid targets.
-		if bytes.HasPrefix(addr.Bytes(), deadPrefix) {
-			isValidMessageTarget = false
-		}
-		// As long as this is a valid target and the message didn't revert then we can consider
-		// this a successful L1 => L2 message.
-		if isValidMessageTarget && err == nil {
-			evm.Context.IsSuccessfulL1ToL2Message = true
-		}
-	}
 
 	// When an error was returned by the EVM or when setting the creation code
 	// above we revert to the snapshot and consume any gas remaining. Additionally
@@ -418,48 +362,6 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 		evm.StateDB.RevertToSnapshot(snapshot)
 		if err != errExecutionReverted {
 			contract.UseGas(contract.Gas)
-		}
-	}
-
-	if UsingOVM {
-		// OVM_ENABLED
-		if evm.depth == 0 {
-			// We're back at the root-level message call, so we'll need to modify the return data
-			// sent to us by the OVM_ExecutionManager to instead be the intended return data.
-
-			// We skip the parsing step if this was a successful L1 => L2 message. Note that if err
-			// is set (perhaps because of an error in ExecutionManager.run) we'll still return that
-			// error.
-			if !evm.Context.IsSuccessfulL1ToL2Message {
-				// Attempt to decode the returndata as as ExecutionManager.run when
-				// it is not an `eth_call` and as ExecutionManager.simulateMessage
-				// when it is an `eth_call`. If the data is not decodable as ABI
-				// encoded bytes, then return nothing. If the data is able to be
-				// decoded as bytes, then attempt to decode as (bool, bytes)
-				isDecodable := true
-				returnData := runReturnData{}
-				if err := codec.Unpack(&returnData, "blob", ret); err != nil {
-					isDecodable = false
-				}
-
-				switch isDecodable {
-				case true:
-					inner := innerData{}
-					// If this fails to decode, the nil values will be set in
-					// `inner`, meaning that it will be interpreted as reverted
-					// execution with empty returndata
-					_ = codec.Unpack(&inner, "call", returnData.ReturnData)
-					if !inner.Success {
-						err = errExecutionReverted
-					}
-					ret = inner.ReturnData
-				case false:
-					ret = []byte{}
-				}
-			}
-			if evm.Context.EthCallSender == nil {
-				log.Debug("Reached the end of an OVM execution", "Return Data", hexutil.Encode(ret), "Error", err)
-			}
 		}
 	}
 
@@ -609,6 +511,9 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 		}
 	}
 
+	nonce := evm.StateDB.GetNonce(caller.Address())
+	evm.StateDB.SetNonce(caller.Address(), nonce+1)
+
 	// Ensure there's no existing contract already at the designated address
 	contractHash := evm.StateDB.GetCodeHash(address)
 	if evm.StateDB.GetNonce(address) != 0 || (contractHash != (common.Hash{}) && contractHash != emptyCodeHash) {
@@ -678,23 +583,7 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 
 // Create creates a new contract using code as deployment code.
 func (evm *EVM) Create(caller ContractRef, code []byte, gas uint64, value *big.Int) (ret []byte, contractAddr common.Address, leftOverGas uint64, err error) {
-	if !UsingOVM {
-		// OVM_DISABLED
-		contractAddr = crypto.CreateAddress(caller.Address(), evm.StateDB.GetNonce(caller.Address()))
-	} else {
-		// OVM_ENABLED
-		if caller.Address() != evm.Context.OvmExecutionManager.Address {
-			log.Error("Creation called by non-Execution Manager contract! This should never happen.", "Offending address", caller.Address().Hex())
-			return nil, caller.Address(), 0, ErrOvmCreationFailed
-		}
-
-		contractAddr = evm.OvmADDRESS()
-
-		if evm.Context.EthCallSender == nil {
-			log.Debug("[EM] Creating contract.", "New contract address", contractAddr.Hex(), "Caller Addr", caller.Address().Hex(), "Caller nonce", evm.StateDB.GetNonce(caller.Address()))
-		}
-	}
-
+	contractAddr = crypto.CreateAddress(caller.Address(), evm.StateDB.GetNonce(caller.Address()))
 	return evm.create(caller, &codeAndHash{code: code}, gas, value, contractAddr)
 }
 
@@ -704,23 +593,7 @@ func (evm *EVM) Create(caller ContractRef, code []byte, gas uint64, value *big.I
 // instead of the usual sender-and-nonce-hash as the address where the contract is initialized at.
 func (evm *EVM) Create2(caller ContractRef, code []byte, gas uint64, endowment *big.Int, salt *big.Int) (ret []byte, contractAddr common.Address, leftOverGas uint64, err error) {
 	codeAndHash := &codeAndHash{code: code}
-	if !UsingOVM {
-		// OVM_DISABLED
-		contractAddr = crypto.CreateAddress2(caller.Address(), common.BigToHash(salt), codeAndHash.Hash().Bytes())
-	} else {
-		// OVM_ENABLED
-		if caller.Address() != evm.Context.OvmExecutionManager.Address {
-			log.Error("Creation called by non-Execution Manager contract! This should never happen.", "Offending address", caller.Address().Hex())
-			return nil, caller.Address(), 0, ErrOvmCreationFailed
-		}
-
-		contractAddr = evm.OvmADDRESS()
-
-		if evm.Context.EthCallSender == nil {
-			log.Debug("[EM] Creating contract [create2].", "New contract address", contractAddr.Hex(), "Caller Addr", caller.Address().Hex(), "Caller nonce", evm.StateDB.GetNonce(caller.Address()))
-		}
-	}
-
+	contractAddr = crypto.CreateAddress2(caller.Address(), common.BigToHash(salt), codeAndHash.Hash().Bytes())
 	return evm.create(caller, codeAndHash, gas, endowment, contractAddr)
 }
 
