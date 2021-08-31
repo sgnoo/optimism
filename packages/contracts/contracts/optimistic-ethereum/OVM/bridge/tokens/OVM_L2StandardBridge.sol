@@ -177,7 +177,6 @@ contract OVM_L2StandardBridge is iOVM_L2ERC20Bridge, OVM_CrossDomainEnabled {
         uint256 _amount,
         uint256 _fee,
         uint256 _deadline,
-        uint256 _index,
         uint256 _nonce,
         uint32 _l1Gas,
         bytes calldata _data
@@ -228,7 +227,6 @@ contract OVM_L2StandardBridge is iOVM_L2ERC20Bridge, OVM_CrossDomainEnabled {
             _data
         );
     }
-
 
     function _initiateFastWithdrawal(
         address _l2Token,

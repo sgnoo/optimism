@@ -93,9 +93,10 @@ interface iOVM_L2ERC20Bridge {
 
     function fastWithdraw (
         address _l2Token,
-        uint _amount,
-        uint _fee,
-        uint _deadline,
+        uint256 _amount,
+        uint256 _fee,
+        uint256 _deadline,
+        uint256 _nonce,
         uint32 _l1Gas,
         bytes calldata _data
     )
@@ -104,9 +105,10 @@ interface iOVM_L2ERC20Bridge {
     function fastWithdrawTo (
         address _l2Token,
         address _to,
-        uint _amount,
-        uint _fee,
-        uint _deadline,
+        uint256 _amount,
+        uint256 _fee,
+        uint256 _deadline,
+        uint256 _nonce,
         uint32 _l1Gas,
         bytes calldata _data
     )
