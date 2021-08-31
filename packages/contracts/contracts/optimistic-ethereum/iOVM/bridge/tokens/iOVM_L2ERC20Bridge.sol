@@ -20,6 +20,17 @@ interface iOVM_L2ERC20Bridge {
         bytes _data
     );
 
+    event FastWithdrawalInitiated (
+        address indexed _l1Token,
+        address indexed _l2Token,
+        address indexed _from,
+        address _to,
+        uint256 _amount,
+        uint256 _fee,
+        uint256 _deadline,
+        bytes _data
+    );
+
     event DepositFinalized (
         address indexed _l1Token,
         address indexed _l2Token,
@@ -74,6 +85,27 @@ interface iOVM_L2ERC20Bridge {
         address _l2Token,
         address _to,
         uint _amount,
+        uint32 _l1Gas,
+        bytes calldata _data
+    )
+        external;
+
+    function fastWithdraw (
+        address _l2Token,
+        uint _amount,
+        uint _fee,
+        uint _deadline,
+        uint32 _l1Gas,
+        bytes calldata _data
+    )
+        external;
+
+    function fastWithdrawTo (
+        address _l2Token,
+        address _to,
+        uint _amount,
+        uint _fee,
+        uint _deadline,
         uint32 _l1Gas,
         bytes calldata _data
     )

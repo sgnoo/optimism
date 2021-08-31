@@ -8,6 +8,30 @@ import "./iOVM_L1ERC20Bridge.sol";
  * @title iOVM_L1StandardBridge
  */
 interface iOVM_L1StandardBridge is iOVM_L1ERC20Bridge {
+    /**********
+     * Enums *
+     *********/
+
+    enum FastWithdrawalStatus {
+        REVERTED, // TODO: need?
+        PROCESSED,
+        CLAIMABLE,
+        CLAIMED,
+        CHALLENGED // TODO
+    }
+
+    /***********
+     * Structs *
+     ***********/
+    // TODO: check structure optimization.
+    struct FastWithdrawalRequest (
+        uint256 l2TxIndex; // after fruad proof window, l2TxIndex will be generated.
+        uint256 amount;
+        bool isETH;
+        address l1Token;
+        address l2Token;
+        FastWithdrawalStatus status;
+    )
 
     /**********
      * Events *
