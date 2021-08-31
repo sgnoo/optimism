@@ -14,11 +14,10 @@ import { iOVM_L1ClaimableERC721 } from "../../../../contracts/optimistic-ethereu
 contract OVM_Oracle is iOVM_L1Oracle {
 
     // TODO: make interface id
-    bytes4 private constant _INTERFACE_ID_FAST_WITHDRAW    = 0x01ffc9a7;
-    bytes4 private constant _INTERFACE_ID_FAST_WITHDRAW_TO = 0x01ffc9a7;
+    bytes4 private constant _INTERFACE_ID_FAST_WITHDRAW    = 0xfc2bb3a8; // fastWithdraw(address,uint256,uint256,uint256,uint256,uint32,bytes)
+    bytes4 private constant _INTERFACE_ID_FAST_WITHDRAW_TO = 0xdaaab375; // fastWithdrawTo(address,address,uint256,uint256,uint256,uint256,uint32,bytes)
 
     iOVM_L1StandardBridge public ovmL1StandardBridge;
-    // TODO: need to support multiple CTC?
     iOVM_CanonicalTransactionChain public ovmCanonicalTransactionChain;
     iOVM_L1ClaimableERC721 public ovmL1ClaimableERC721;
 
