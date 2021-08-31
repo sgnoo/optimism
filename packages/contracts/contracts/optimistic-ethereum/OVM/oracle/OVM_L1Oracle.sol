@@ -39,8 +39,8 @@ contract OVM_Oracle is iOVM_L1Oracle {
     }
 
     function processFastWithdrawal (
-        Lib_OVMCodec.Transaction memory _transaction,
-        Lib_OVMCodec.TransactionChainElement memory _txChainElement,
+        Lib_OVMCodec.Transaction calldata _transaction,
+        Lib_OVMCodec.TransactionChainElement memory _txChainElement, // TODO: use calldata?
         Lib_OVMCodec.ChainBatchHeader memory _batchHeader,
         Lib_OVMCodec.ChainInclusionProof memory _inclusionProof
     ) external returns (bool) {
@@ -54,15 +54,12 @@ contract OVM_Oracle is iOVM_L1Oracle {
             "Invalid transaction inclusion proof."
         );
 
-        // TODO: check
-        bytes4 sig;
-        assembly {
-            sig := mload(add(_transaction.data, add(0x20, 0)))
-        }
-
+        // TODO: check if it works.
+        bytes4 sig = bytes4(_transaction.data[:4]);
         require(
-            sig == _INTERFACE_ID_FAST_WITHDRAW || sig == _INTERFACE_ID_FAST_WITHDRAW_TO,
-            ""
+            sig == _INTERFACE_ID_FAST_WITHDRAW ||
+            sig == _INTERFACE_ID_FAST_WITHDRAW_TO,
+            "Invalid request for fast withdrawal."
         );
 
         uint256 _fee;
