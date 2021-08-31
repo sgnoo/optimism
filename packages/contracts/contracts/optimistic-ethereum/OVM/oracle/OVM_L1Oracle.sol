@@ -13,13 +13,12 @@ import { iOVM_L1ClaimableERC721 } from "../../../../contracts/optimistic-ethereu
 
 contract OVM_Oracle is iOVM_L1Oracle {
 
-    // TODO: make interface id
-    bytes4 private constant _INTERFACE_ID_FAST_WITHDRAW    = 0xfc2bb3a8; // fastWithdraw(address,uint256,uint256,uint256,uint256,uint32,bytes)
-    bytes4 private constant _INTERFACE_ID_FAST_WITHDRAW_TO = 0xdaaab375; // fastWithdrawTo(address,address,uint256,uint256,uint256,uint256,uint32,bytes)
-
     iOVM_L1StandardBridge public ovmL1StandardBridge;
     iOVM_CanonicalTransactionChain public ovmCanonicalTransactionChain;
     iOVM_L1ClaimableERC721 public ovmL1ClaimableERC721;
+
+    bytes4 private constant _INTERFACE_ID_FAST_WITHDRAW    = 0xfc2bb3a8; // fastWithdraw(address,uint256,uint256,uint256,uint256,uint32,bytes)
+    bytes4 private constant _INTERFACE_ID_FAST_WITHDRAW_TO = 0xdaaab375; // fastWithdrawTo(address,address,uint256,uint256,uint256,uint256,uint32,bytes)
 
     function initialize (
         address _ovmL1StandardBridge,
@@ -32,7 +31,7 @@ contract OVM_Oracle is iOVM_L1Oracle {
             _ovmL1StandardBridge          != address(0) &&
             _ovmCanonicalTransactionChain != address(0) &&
             _ovmL1ClaimableERC721         != address(0),
-            ""
+            "Must provide contract address"
         )
         ovmL1StandardBridge          = iOVM_L1StandardBridge(_ovmL1StandardBridge);
         ovmCanonicalTransactionChain = iOVM_CanonicalTransactionChain(_ovmCanonicalTransactionChain);
@@ -52,7 +51,7 @@ contract OVM_Oracle is iOVM_L1Oracle {
                 _batchHeader,
                 _inclusionProof
             ),
-            ""
+            "Invalid transaction inclusion proof."
         );
 
         // TODO: check
