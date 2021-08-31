@@ -7,7 +7,7 @@ pragma experimental ABIEncoderV2;
 import { iOVM_L1StandardBridge } from "../../../iOVM/bridge/tokens/iOVM_L1StandardBridge.sol";
 import { iOVM_L1ERC20Bridge } from "../../../iOVM/bridge/tokens/iOVM_L1ERC20Bridge.sol";
 import { iOVM_L2ERC20Bridge } from "../../../iOVM/bridge/tokens/iOVM_L2ERC20Bridge.sol";
-import { iOVM_Oracle } from "../../../iOVM/oracle/iOVM_Oracle.sol";
+import { iOVM_L1Oracle } from "../../../iOVM/oracle/iOVM_L1Oracle.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 /* Library Imports */
@@ -441,9 +441,8 @@ contract OVM_L1StandardBridge is iOVM_L1StandardBridge, OVM_CrossDomainEnabled {
 
     // TODO: param tokenId? _nonce?
     function claimFastWithdrawal (uint256 _nonce) external {
-        // TODO: import iOVM_Oracle interface
         // TODO: token naming.
-        iOVM_L1ClaimableERC721 claimableToken = iOVM_Oracle(l1Oracle).ovmL1ClaimableERC721();
+        iOVM_L1ClaimableERC721 claimableToken = iOVM_L1Oracle(l1Oracle).ovmL1ClaimableERC721();
         require(
             claimableToken.ownerOf(_nonce) == msg.sender, ""
         );
