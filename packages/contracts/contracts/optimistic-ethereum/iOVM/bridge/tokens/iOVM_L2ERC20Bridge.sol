@@ -28,6 +28,7 @@ interface iOVM_L2ERC20Bridge {
         uint256 _amount,
         uint256 _fee,
         uint256 _deadline,
+        uint256 _nonce,
         bytes _data
     );
 

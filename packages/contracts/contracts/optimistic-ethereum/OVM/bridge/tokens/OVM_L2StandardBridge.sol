@@ -178,6 +178,7 @@ contract OVM_L2StandardBridge is iOVM_L2ERC20Bridge, OVM_CrossDomainEnabled {
         uint256 _fee,
         uint256 _deadline,
         uint256 _index,
+        uint256 _nonce,
         uint32 _l1Gas,
         bytes calldata _data
     )
@@ -192,7 +193,7 @@ contract OVM_L2StandardBridge is iOVM_L2ERC20Bridge, OVM_CrossDomainEnabled {
             _amount,
             _fee,
             _deadline,
-            _index,
+            nonce,
             _l1Gas,
             _data
         );
@@ -242,7 +243,10 @@ contract OVM_L2StandardBridge is iOVM_L2ERC20Bridge, OVM_CrossDomainEnabled {
     )
         internal
     {
-        require(_nonce == fastWithdrawalNonce, "");
+        require(
+            _nonce == fastWithdrawalNonce,
+            "Actual nonce for fast withdrawal does not match expected nonce."
+        );
 
         // When a withdrawal is initiated, we burn the withdrawer's funds to prevent subsequent L2
         // usage
@@ -254,8 +258,6 @@ contract OVM_L2StandardBridge is iOVM_L2ERC20Bridge, OVM_CrossDomainEnabled {
         bytes memory message;
 
         if (_l2Token == Lib_PredeployAddresses.OVM_ETH) {
-            // TODO: doesn't need _fee, _deadline, when withdrawing, not fast withdrawal?
-            // TODO: do we need only initiateWithdrawal? we have to check.
             message = abi.encodeWithSelector(
                         iOVM_L1StandardBridge.finalizeETHFastWithdrawal.selector,
                         _from,
@@ -291,8 +293,17 @@ contract OVM_L2StandardBridge is iOVM_L2ERC20Bridge, OVM_CrossDomainEnabled {
             message
         );
 
-        // TODO: need to add nonce to this event?
-        emit FastWithdrawalInitiated(l1Token, _l2Token, msg.sender, _to, _amount, _fee, _deadline, _nonce, block.number, _data);
+        emit FastWithdrawalInitiated(
+            l1Token,
+            _l2Token,
+            msg.sender,
+            _to,
+            _amount,
+            _fee,
+            _deadline,
+            _nonce,
+            _data
+        );
     }
 
     /************************************
