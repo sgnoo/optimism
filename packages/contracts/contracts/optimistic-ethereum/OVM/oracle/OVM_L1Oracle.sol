@@ -8,9 +8,10 @@ import { Lib_OVMCodec } from "../../libraries/codec/Lib_OVMCodec.sol";
 /* Interface Imports */
 import { iOVM_CanonicalTransactionChain } from "../../../../contracts/optimistic-ethereum/iOVM/chain/iOVM_CanonicalTransactionChain.sol";
 import { iOVM_L1StandardBridge } from "../../../../contracts/optimistic-ethereum/iOVM/bridge/tokens/iOVM_L1StandardBridge.sol";
+import { iOVM_L1Oracle } from "../../../../contracts/optimistic-ethereum/iOVM/oracle/iOVM_L1Oracle.sol";
 import { iOVM_L1ClaimableERC721 } from "../../../../contracts/optimistic-ethereum/iOVM/oracle/iOVM_L1ClaimableERC721.sol";
 
-contract OVM_Oracle {
+contract OVM_Oracle is iOVM_L1Oracle {
 
     // TODO: make interface id
     bytes4 private constant _INTERFACE_ID_FAST_WITHDRAW    = 0x01ffc9a7;
