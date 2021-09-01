@@ -173,35 +173,7 @@ contract OVM_L2StandardBridge is iOVM_L2ERC20Bridge, OVM_CrossDomainEnabled {
      * @inheritdoc iOVM_L2ERC20Bridge
      */
     function fastWithdraw(
-        address _l2Token,
-        uint256 _amount,
-        uint256 _fee,
-        uint256 _deadline,
-        uint256 _nonce,
-        uint32 _l1Gas,
-        bytes calldata _data
-    )
-        external
-        override
-        virtual
-    {
-        _initiateFastWithdrawal(
-            _l2Token,
-            msg.sender,
-            msg.sender,
-            _amount,
-            _fee,
-            _deadline,
-            nonce,
-            _l1Gas,
-            _data
-        );
-    }
-
-    /**
-     * @inheritdoc iOVM_L2ERC20Bridge
-     */
-    function fastWithdrawTo(
+        address _l1Token,
         address _l2Token,
         address _to,
         uint256 _amount,
@@ -216,6 +188,7 @@ contract OVM_L2StandardBridge is iOVM_L2ERC20Bridge, OVM_CrossDomainEnabled {
         virtual
     {
         _initiateFastWithdrawal(
+            _l1Token,
             _l2Token,
             msg.sender,
             _to,
@@ -229,6 +202,7 @@ contract OVM_L2StandardBridge is iOVM_L2ERC20Bridge, OVM_CrossDomainEnabled {
     }
 
     function _initiateFastWithdrawal(
+        address _l1Token,
         address _l2Token,
         address _from,
         address _to,
@@ -251,10 +225,14 @@ contract OVM_L2StandardBridge is iOVM_L2ERC20Bridge, OVM_CrossDomainEnabled {
         uint256 amount = SafeMath.add(_amount, _fee);
         IL2StandardERC20(_l2Token).burn(msg.sender, amount);
 
-        // Construct calldata for l1TokenBridge.finalizeERC20Withdrawal(_to, _amount)
         address l1Token = IL2StandardERC20(_l2Token).l1Token();
-        bytes memory message;
+        require(
+            _l1Token == l1Token,
+            "Actual l1 token address does not match expected address."
+        );
 
+        // Construct calldata for l1TokenBridge.finalizeERC20Withdrawal(_to, _amount)
+        bytes memory message;
         if (_l2Token == Lib_PredeployAddresses.OVM_ETH) {
             message = abi.encodeWithSelector(
                         iOVM_L1StandardBridge.finalizeETHFastWithdrawal.selector,
@@ -270,7 +248,7 @@ contract OVM_L2StandardBridge is iOVM_L2ERC20Bridge, OVM_CrossDomainEnabled {
         } else {
             message = abi.encodeWithSelector(
                         iOVM_L1ERC20Bridge.finalizeERC20FastWithdrawal.selector,
-                        l1Token,
+                        _l1Token,
                         _l2Token,
                         _from,
                         _to,
@@ -292,7 +270,7 @@ contract OVM_L2StandardBridge is iOVM_L2ERC20Bridge, OVM_CrossDomainEnabled {
         );
 
         emit FastWithdrawalInitiated(
-            l1Token,
+            _l1Token,
             _l2Token,
             msg.sender,
             _to,

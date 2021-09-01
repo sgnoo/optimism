@@ -92,17 +92,7 @@ interface iOVM_L2ERC20Bridge {
         external;
 
     function fastWithdraw (
-        address _l2Token,
-        uint256 _amount,
-        uint256 _fee,
-        uint256 _deadline,
-        uint256 _nonce,
-        uint32 _l1Gas,
-        bytes calldata _data
-    )
-        external;
-
-    function fastWithdrawTo (
+        address _l1Token,
         address _l2Token,
         address _to,
         uint256 _amount,

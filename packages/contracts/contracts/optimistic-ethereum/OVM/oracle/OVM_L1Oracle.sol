@@ -57,23 +57,24 @@ contract OVM_Oracle is iOVM_L1Oracle {
         // TODO: check if it works.
         bytes4 sig = bytes4(_transaction.data[:4]);
         require(
-            sig == _INTERFACE_ID_FAST_WITHDRAW ||
-            sig == _INTERFACE_ID_FAST_WITHDRAW_TO,
-            "Invalid request for fast withdrawal."
+            sig == bytes4(keccak256("fastWithdraw(address,address,address,uint256,uint256,uint256,uint256,uint32,bytes)")),
+            ""
         );
 
-        uint256 _fee;
-        uint256 _amount;
-        uint256 _deadline;
-        uint256 _nonce;
-        if (sig == _INTERFACE_ID_FAST_WITHDRAW) {
-            (, _amount, _fee, _deadline, _nonce, ,) =
-                abi.decode(_transaction.data, address, uint256, uint256, uint256, uint256, uint32, bytes));
-        } else {
-            (, , _amount, _fee, _deadline, _nonce, ,) =
-                abi.decode(_transaction.data, address, address, uint256, uint256, uint256, uint256, uint32, bytes));
-        }
-        // TODO: amount check?
+        // Decode Layer 2 transaction data.
+        (
+            address _l1Token,
+            address _l2Token,
+            address _to,
+            uint256 _amount,
+            uint256 _fee,
+            uint256 _deadline,
+            uint256 _nonce,
+            bytes,
+        ) = abi.decode(
+            _transaction.data,
+            address, address, uint256, uint256, uint256, uint256, uint32, bytes
+        );
 
         require(
             _checkFee(fee),
