@@ -11,14 +11,13 @@ interface iOVM_Oracle {
      * Events *
      **********/
 
-    event ProcessedFastWithdrawal (bytes32 message);
+    event ProcessedFastWithdrawal (uint256 _nonce);
 
     /********************
      * Public Functions *
      ********************/
 
     function processFastWithdrawal (
-        bytes32 message,
         Lib_OVMCodec.Transaction memory _transaction,
         Lib_OVMCodec.TransactionChainElement memory _txChainElement,
         Lib_OVMCodec.ChainBatchHeader memory _batchHeader,
