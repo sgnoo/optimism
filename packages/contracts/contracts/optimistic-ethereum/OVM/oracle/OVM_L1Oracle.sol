@@ -17,8 +17,10 @@ contract OVM_Oracle is iOVM_L1Oracle {
     iOVM_CanonicalTransactionChain public ovmCanonicalTransactionChain;
     iOVM_L1ClaimableERC721 public ovmL1ClaimableERC721;
 
-    bytes4 private constant _INTERFACE_ID_FAST_WITHDRAW    = 0xfc2bb3a8; // fastWithdraw(address,uint256,uint256,uint256,uint256,uint32,bytes)
-    bytes4 private constant _INTERFACE_ID_FAST_WITHDRAW_TO = 0xdaaab375; // fastWithdrawTo(address,address,uint256,uint256,uint256,uint256,uint32,bytes)
+    // TODO: naming. liquidity? or tokens? etc...
+    mapping(address => mapping(address => uint256)) reserve;
+
+    address private constant OVM_ETH = 0x4200000000000000000000000000000000000006;
 
     function initialize (
         address _ovmL1StandardBridge,
@@ -40,9 +42,9 @@ contract OVM_Oracle is iOVM_L1Oracle {
 
     function processFastWithdrawal (
         Lib_OVMCodec.Transaction calldata _transaction,
-        Lib_OVMCodec.TransactionChainElement memory _txChainElement, // TODO: use calldata?
-        Lib_OVMCodec.ChainBatchHeader memory _batchHeader,
-        Lib_OVMCodec.ChainInclusionProof memory _inclusionProof
+        Lib_OVMCodec.TransactionChainElement calldata _txChainElement,
+        Lib_OVMCodec.ChainBatchHeader calldata _batchHeader,
+        Lib_OVMCodec.ChainInclusionProof calldata _inclusionProof
     ) external returns (bool) {
         require(
             iOVM_CanonicalTransactionChain.verifyTransaction(
@@ -84,18 +86,30 @@ contract OVM_Oracle is iOVM_L1Oracle {
             _checkDeadline(deadline),
             ""
         );
+        // TODO: liquidity check.
 
         // This function checks if fast withdrawal has already processed. Do we need to put explicit condition?
         // require(iOVM_L1StandardBridge.fastWithdrawals == false).
         require(
-            iOVM_L1StandardBridge.processFastWithdrawal(_nonce),
-            ""
+            iOVM_L1StandardBridge.processFastWithdrawal(_nonce) == true,
+            "L1 Bridge does not accept processing fast withdrawal."
         );
 
-        // TODO: make NFT tokens for FW. fToken id should be claimId.
-        ovmL1ClaimableERC721.safeMint(_to, msg.sender);
+        if (_l2Token == OVM_ETH) {
+            (bool success, ) = _to.call{value: _amount}(new bytes(0));
+
+            require(success, "TransferHelper::safeTransferETH: ETH transfer failed");
+        } else {
+            reserve[_l1Token][_l2Token] = reserve[_l1Token][_l2Token].sub(_amount);
+
+            // When a withdrawal is finalized on L1, the L1 Bridge transfers the funds to the withdrawer
+            IERC20(_l1Token).safeTransfer(_to, _amount);
+        }
+
+        ovmL1ClaimableERC721.safeMint(msg.sender, _nonce);
 
         emit ProcessedFastWithdrawal(_nonce);
+
         return true;
     }
 
@@ -109,5 +123,10 @@ contract OVM_Oracle is iOVM_L1Oracle {
         if (deadlineManager == address(0)) {
             return true;
         }
+    }
+
+    // TODO: add liquidity function
+    function addLiquidity(address _l1Token, address _l2Token, uint256 _amount) {
+        reserve[_l1Token, _l2Token] += _amount;
     }
 }
