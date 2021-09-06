@@ -9,6 +9,7 @@ import { Lib_OVMCodec } from "../../libraries/codec/Lib_OVMCodec.sol";
 import { iOVM_CanonicalTransactionChain } from "../../../../contracts/optimistic-ethereum/iOVM/chain/iOVM_CanonicalTransactionChain.sol";
 import { iOVM_L1StandardBridge } from "../../../../contracts/optimistic-ethereum/iOVM/bridge/tokens/iOVM_L1StandardBridge.sol";
 import { iOVM_L1Oracle } from "../../../../contracts/optimistic-ethereum/iOVM/oracle/iOVM_L1Oracle.sol";
+import { iOVM_L1FeeManager } from "../../../../contracts/optimistic-ethereum/iOVM/oracle/iOVM_L1FeeManager.sol";
 import { iOVM_L1ClaimableERC721 } from "../../../../contracts/optimistic-ethereum/iOVM/oracle/iOVM_L1ClaimableERC721.sol";
 
 contract OVM_L1Oracle is iOVM_L1Oracle {
@@ -16,6 +17,7 @@ contract OVM_L1Oracle is iOVM_L1Oracle {
     iOVM_L1StandardBridge public ovmL1StandardBridge;
     iOVM_CanonicalTransactionChain public ovmCanonicalTransactionChain;
     iOVM_L1ClaimableERC721 public ovmL1ClaimableERC721;
+    iOVM_L1FeeManager public ovmL1FeeManager;
 
     // TODO: naming. liquidity? or tokens? etc...
     mapping(address => mapping(address => uint256)) reserve;
@@ -25,19 +27,24 @@ contract OVM_L1Oracle is iOVM_L1Oracle {
     function initialize (
         address _ovmL1StandardBridge,
         address _ovmCanonicalTransactionChain,
-        address _ovmL1ClaimableERC721
+        address _ovmL1ClaimableERC721,
+        address _ovmL1FeeManager
     )
         external
     {
         require(
             _ovmL1StandardBridge          != address(0) &&
             _ovmCanonicalTransactionChain != address(0) &&
-            _ovmL1ClaimableERC721         != address(0),
+            _ovmL1ClaimableERC721         != address(0) &&
+            _ovmL1FeeManager              != address(0),
             "Must provide contract address"
         )
+
         ovmL1StandardBridge          = iOVM_L1StandardBridge(_ovmL1StandardBridge);
         ovmCanonicalTransactionChain = iOVM_CanonicalTransactionChain(_ovmCanonicalTransactionChain);
         ovmL1ClaimableERC721         = iOVM_L1ClaimableERC721(_ovmL1ClaimableERC721);
+        // TODO: deploy L1FeeManager contract here or set? setFeeManager function?
+        ovmL1FeeManager              = iOVM_L1FeeManager(_ovmL1FeeManager);
     }
 
     function processFastWithdrawal (
@@ -80,10 +87,6 @@ contract OVM_L1Oracle is iOVM_L1Oracle {
         );
 
         require(
-            _checkFee(fee),
-            ""
-        );
-        require(
             _checkDeadline(deadline),
             ""
         );
@@ -97,10 +100,20 @@ contract OVM_L1Oracle is iOVM_L1Oracle {
         );
 
         if (_l2Token == OVM_ETH) {
+            require(
+                _checkETHFee(_fee),
+                ""
+            );
+
             (bool success, ) = _to.call{value: _amount}(new bytes(0));
 
             require(success, "TransferHelper::safeTransferETH: ETH transfer failed");
         } else {
+            require(
+                _checkERC20Fee(_l1Token, _fee),
+                ""
+            );
+
             reserve[_l1Token][_l2Token] = reserve[_l1Token][_l2Token].sub(_amount);
 
             // When a withdrawal is finalized on L1, the L1 Bridge transfers the funds to the withdrawer
@@ -112,12 +125,6 @@ contract OVM_L1Oracle is iOVM_L1Oracle {
         emit ProcessedFastWithdrawal(_nonce);
 
         return true;
-    }
-
-    function checkFee () {
-        if (feeManager == address(0)) {
-            return true;
-        }
     }
 
     function checkDeadline () {
