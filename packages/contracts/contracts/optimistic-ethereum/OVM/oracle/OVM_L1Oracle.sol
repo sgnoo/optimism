@@ -11,7 +11,7 @@ import { iOVM_L1StandardBridge } from "../../../../contracts/optimistic-ethereum
 import { iOVM_L1Oracle } from "../../../../contracts/optimistic-ethereum/iOVM/oracle/iOVM_L1Oracle.sol";
 import { iOVM_L1ClaimableERC721 } from "../../../../contracts/optimistic-ethereum/iOVM/oracle/iOVM_L1ClaimableERC721.sol";
 
-contract OVM_Oracle is iOVM_L1Oracle {
+contract OVM_L1Oracle is iOVM_L1Oracle {
 
     iOVM_L1StandardBridge public ovmL1StandardBridge;
     iOVM_CanonicalTransactionChain public ovmCanonicalTransactionChain;
@@ -72,10 +72,11 @@ contract OVM_Oracle is iOVM_L1Oracle {
             uint256 _fee,
             uint256 _deadline,
             uint256 _nonce,
-            bytes,
+            uint32, // l1Gas
+            bytes,  // data
         ) = abi.decode(
             _transaction.data,
-            address, address, uint256, uint256, uint256, uint256, uint32, bytes
+            address, address, address, uint256, uint256, uint256, uint256, uint32, bytes
         );
 
         require(
