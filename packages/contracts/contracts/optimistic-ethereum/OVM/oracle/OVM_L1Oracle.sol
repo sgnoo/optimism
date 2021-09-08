@@ -26,7 +26,9 @@ contract OVM_L1Oracle is iOVM_L1Oracle {
     iOVM_L1FeeManager public ovmL1FeeManager;
 
     // TODO: naming. liquidity? or tokens? etc...
-    mapping(address => mapping(address => uint256)) reserve;
+    mapping(address => uint256) reserve;
+    // TODO: depositor can withdraw own tokens which is deposited.
+    mapping(address => mapping(address => uint256)) depositors;
 
     address private constant OVM_ETH = 0x4200000000000000000000000000000000000006;
 
@@ -118,7 +120,12 @@ contract OVM_L1Oracle is iOVM_L1Oracle {
 
         if (_l2Token == OVM_ETH) {
             require(
-                _checkETHFee(_fee),
+                _hasSufficientETH(),
+                ""
+            )
+
+            require(
+                ovmL1FeeManager._checkETHFee(_fee),
                 ""
             );
 
@@ -127,11 +134,16 @@ contract OVM_L1Oracle is iOVM_L1Oracle {
             require(success, "TransferHelper::safeTransferETH: ETH transfer failed");
         } else {
             require(
-                _checkERC20Fee(_l1Token, _fee),
+                _hasSufficientERC20(_l1Token),
+                ""
+            )
+
+            require(
+                ovmL1FeeManager._checkERC20Fee(_l1Token, _fee),
                 ""
             );
 
-            reserve[_l1Token][_l2Token] = reserve[_l1Token][_l2Token].sub(_amount);
+            reserve[_l1Token] = reserve[_l1Token].sub(_amount);
 
             // When a withdrawal is finalized on L1, the L1 Bridge transfers the funds to the withdrawer
             IERC20(_l1Token).safeTransfer(_to, _amount);
@@ -144,10 +156,33 @@ contract OVM_L1Oracle is iOVM_L1Oracle {
         return true;
     }
 
-    function checkDeadline () {
-        if (deadlineManager == address(0)) {
-            return true;
-        }
+    function depositERC20(address _l1Token, uint256 _amount) {
+        reserve[_l1Token].add(_amount);
+
+        // TODO: need to check if l1Token is ERC20?
+        depositor[msg.sender][_l1Token].add(_amount);
+    }
+
+    function depositETH() {
+        // TODO
+    }
+
+    function withdrawETH (uint256 _amount) {
+        // TODO
+    }
+
+    function withdrawERC20 (address _l1Token, uint256 _amount) {
+        // TODO
+    }
+
+    function _hasSufficientETH () {
+    }
+
+    function _hasSufficientERC20 () {
+    }
+
+    function setAllowedTimeSeconds (uint256 _allowedTimeSeconds) external {
+        allowedTimeSeconds = _allowedTimeSeconds;
     }
 
     function isExpired (uint256 deadline) external returns (bool) {

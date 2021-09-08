@@ -5,7 +5,7 @@ pragma experimental ABIEncoderV2;
 /* Library Imports */
 import { Lib_OVMCodec } from "../../libraries/codec/Lib_OVMCodec.sol";
 
-interface iOVM_Oracle {
+interface iOVM_L1Oracle {
 
     /**********
      * Events *
