@@ -14,6 +14,12 @@ import { iOVM_L1ClaimableERC721 } from "../../../../contracts/optimistic-ethereu
 
 contract OVM_L1Oracle is iOVM_L1Oracle {
 
+    /*************
+     * Variables *
+     *************/
+
+    uint256 public allowedTimeSeconds;
+
     iOVM_L1StandardBridge public ovmL1StandardBridge;
     iOVM_CanonicalTransactionChain public ovmCanonicalTransactionChain;
     iOVM_L1ClaimableERC721 public ovmL1ClaimableERC721;
@@ -23,6 +29,18 @@ contract OVM_L1Oracle is iOVM_L1Oracle {
     mapping(address => mapping(address => uint256)) reserve;
 
     address private constant OVM_ETH = 0x4200000000000000000000000000000000000006;
+
+    /***************
+     * Constructor *
+     ***************/
+
+    constructor (uint256 _allowedTimeSeconds) {
+        _allowedTimeSeconds = allowedTimeSeconds;
+    }
+
+    /********************
+     * Public Functions *
+     ********************/
 
     function initialize (
         address _ovmL1StandardBridge,
@@ -86,11 +104,10 @@ contract OVM_L1Oracle is iOVM_L1Oracle {
             address, address, address, uint256, uint256, uint256, uint256, uint32, bytes
         );
 
-        require(
-            _checkDeadline(deadline),
-            ""
-        );
-        // TODO: liquidity check.
+        // If Oracle Service doesn't meet the deadline, Oralce Contract can't get fast withdrawal fee.
+        if (_isExpired(deadline) == false) {
+            _amount = _amount.add(_fee);
+        }
 
         // This function checks if fast withdrawal has already processed. Do we need to put explicit condition?
         // require(iOVM_L1StandardBridge.fastWithdrawals == false).
@@ -133,8 +150,17 @@ contract OVM_L1Oracle is iOVM_L1Oracle {
         }
     }
 
-    // TODO: add liquidity function
-    function addLiquidity(address _l1Token, address _l2Token, uint256 _amount) {
-        reserve[_l1Token, _l2Token] += _amount;
+    function isExpired (uint256 deadline) external returns (bool) {
+        return _isExpired(deadline);
+    }
+
+    function _isExpired (uint256 deadline) internal returns (bool) {
+        // Get L2 last context's timestamp.
+        uint256 lastTimestamp = ovmCanonicalTransactionChain.getLastTimestamp();
+
+        // `allowedTimeSeconds` is seconds that is the interval between l2 context timestamp and submitted timestamp to CTC contract.
+        return lastTimestmap
+                .add(allowedTimeSeconds)
+                .add(deadline) > block.number
     }
 }
