@@ -6,6 +6,7 @@ pragma experimental ABIEncoderV2;
 import { Lib_OVMCodec } from "../../libraries/codec/Lib_OVMCodec.sol";
 
 /* Interface Imports */
+import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { iOVM_CanonicalTransactionChain } from "../../../../contracts/optimistic-ethereum/iOVM/chain/iOVM_CanonicalTransactionChain.sol";
 import { iOVM_L1StandardBridge } from "../../../../contracts/optimistic-ethereum/iOVM/bridge/tokens/iOVM_L1StandardBridge.sol";
 import { iOVM_L1Oracle } from "../../../../contracts/optimistic-ethereum/iOVM/oracle/iOVM_L1Oracle.sol";
@@ -58,8 +59,7 @@ contract OVM_L1Oracle is iOVM_L1Oracle {
             _ovmL1ClaimableERC721         != address(0) &&
             _ovmL1FeeManager              != address(0),
             "Must provide contract address"
-        )
-
+        );
         ovmL1StandardBridge          = iOVM_L1StandardBridge(_ovmL1StandardBridge);
         ovmCanonicalTransactionChain = iOVM_CanonicalTransactionChain(_ovmCanonicalTransactionChain);
         ovmL1ClaimableERC721         = iOVM_L1ClaimableERC721(_ovmL1ClaimableERC721);
@@ -99,15 +99,15 @@ contract OVM_L1Oracle is iOVM_L1Oracle {
             uint256 _fee,
             uint256 _deadline,
             uint256 _nonce,
-            uint32, // l1Gas
-            bytes,  // data
+            , // l1Gas
+            ,  // data
         ) = abi.decode(
             _transaction.data,
             address, address, address, uint256, uint256, uint256, uint256, uint32, bytes
         );
 
         // If Oracle Service doesn't meet the deadline, Oralce Contract can't get fast withdrawal fee.
-        if (_isExpired(deadline) == false) {
+        if (_isExpired(_deadline) == false) {
             _amount = _amount.add(_fee);
         }
 
@@ -122,10 +122,10 @@ contract OVM_L1Oracle is iOVM_L1Oracle {
             require(
                 _hasSufficientETH(),
                 ""
-            )
+            );
 
             require(
-                ovmL1FeeManager._checkETHFee(_fee),
+                ovmL1FeeManager._checkETHFee(_fee), // fee eth? or TON?
                 ""
             );
 
@@ -136,7 +136,7 @@ contract OVM_L1Oracle is iOVM_L1Oracle {
             require(
                 _hasSufficientERC20(_l1Token),
                 ""
-            )
+            );
 
             require(
                 ovmL1FeeManager._checkERC20Fee(_l1Token, _fee),
@@ -156,35 +156,37 @@ contract OVM_L1Oracle is iOVM_L1Oracle {
         return true;
     }
 
-    function depositERC20(address _l1Token, uint256 _amount) {
+    function depositERC20(address _l1Token, uint256 _amount) public {
         reserve[_l1Token].add(_amount);
 
         // TODO: need to check if l1Token is ERC20?
-        depositor[msg.sender][_l1Token].add(_amount);
+        depositors[msg.sender][_l1Token].add(_amount);
     }
 
-    function depositETH() {
+    function depositETH() public {
         // TODO
     }
 
-    function withdrawETH (uint256 _amount) {
+    function withdrawETH (uint256 _amount) public {
         // TODO
     }
 
-    function withdrawERC20 (address _l1Token, uint256 _amount) {
+    function withdrawERC20 (address _l1Token, uint256 _amount) public {
         // TODO
     }
 
-    function _hasSufficientETH () {
+    function _hasSufficientETH () internal {
     }
 
-    function _hasSufficientERC20 () {
+    function _hasSufficientERC20 () internal {
     }
 
     function setAllowedTimeSeconds (uint256 _allowedTimeSeconds) external {
         allowedTimeSeconds = _allowedTimeSeconds;
     }
 
+    // Note: the reason why public function is needed is to let Oracle Service call these functions.
+    //       So before calling processFastWithdarwal function, they check conditions by calling these functions.
     function isExpired (uint256 deadline) external returns (bool) {
         return _isExpired(deadline);
     }
@@ -194,8 +196,9 @@ contract OVM_L1Oracle is iOVM_L1Oracle {
         uint256 lastTimestamp = ovmCanonicalTransactionChain.getLastTimestamp();
 
         // `allowedTimeSeconds` is seconds that is the interval between l2 context timestamp and submitted timestamp to CTC contract.
-        return lastTimestmap
+        // TODO: can get timestamp from batchHeader?
+        return lastTimestamp
                 .add(allowedTimeSeconds)
-                .add(deadline) > block.number
+                .add(deadline) > block.timestamp;
     }
 }

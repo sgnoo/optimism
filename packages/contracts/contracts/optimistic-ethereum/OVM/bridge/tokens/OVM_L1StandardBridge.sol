@@ -8,6 +8,7 @@ import { iOVM_L1StandardBridge } from "../../../iOVM/bridge/tokens/iOVM_L1Standa
 import { iOVM_L1ERC20Bridge } from "../../../iOVM/bridge/tokens/iOVM_L1ERC20Bridge.sol";
 import { iOVM_L2ERC20Bridge } from "../../../iOVM/bridge/tokens/iOVM_L2ERC20Bridge.sol";
 import { iOVM_L1Oracle } from "../../../iOVM/oracle/iOVM_L1Oracle.sol";
+import { iOVM_L1ClaimableERC721 } from "../../../iOVM/oracle/iOVM_L1ClaimableERC721.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 /* Library Imports */
@@ -62,7 +63,7 @@ contract OVM_L1StandardBridge is iOVM_L1StandardBridge, OVM_CrossDomainEnabled {
      */
     function initialize(
         address _l1messenger,
-        address _l2TokenBridge
+        address _l2TokenBridge,
         address _l1Oracle
     )
         public
@@ -354,7 +355,7 @@ contract OVM_L1StandardBridge is iOVM_L1StandardBridge, OVM_CrossDomainEnabled {
             fastWithdrawal.isETH = true;
             fastWithdrawal.amount = _amount.add(_fee);
             fastWithdrawal.l2TxIndex = _l2TxIndex;
-            fastWithdrawal.status = FastWithdrawalStaus.CLAIMABLE;
+            fastWithdrawal.status = FastWithdrawalStatus.CLAIMABLE;
         }
 
         // TODO: modify event params.
@@ -393,7 +394,7 @@ contract OVM_L1StandardBridge is iOVM_L1StandardBridge, OVM_CrossDomainEnabled {
             fastWithdrawal.l2Token = _l2Token;
             fastWithdrawal.amount = _amount.add(_fee);
             fastWithdrawal.l2TxIndex = _l2TxIndex;
-            fastWithdrawal.status = FastWithdrawalStaus.CLAIMABLE;
+            fastWithdrawal.status = FastWithdrawalStatus.CLAIMABLE;
         }
 
         // TODO: make return types? this event should not be emitted, if it is in the `else` condition.
@@ -413,7 +414,7 @@ contract OVM_L1StandardBridge is iOVM_L1StandardBridge, OVM_CrossDomainEnabled {
         returns (bool)
     {
         require(
-            msg.sender == oracle,
+            msg.sender == l1Oracle,
             "Only OVM_Oracle can process fast withdrawal."
         );
 
@@ -442,10 +443,10 @@ contract OVM_L1StandardBridge is iOVM_L1StandardBridge, OVM_CrossDomainEnabled {
     // TODO: param tokenId? _nonce?
     function claimFastWithdrawal (uint256 _nonce) external {
         // TODO: token naming.
-        iOVM_L1ClaimableERC721 ovmL1ClaimableERC721 = iOVM_L1Oracle(l1Oracle).ovmL1ClaimableERC721();
-        require(
-            ovmL1ClaimableERC721.ownerOf(_nonce) == msg.sender, ""
-        );
+        // iOVM_L1ClaimableERC721 ovmL1ClaimableERC721 = iOVM_L1Oracle(l1Oracle).ovmL1ClaimableERC721();
+        // require(
+        //     ovmL1ClaimableERC721.ownerOf(_nonce) == msg.sender, ""
+        // );
 
         FastWithdrawal storage fastWithdrawal = fastWithdrawals[_nonce];
         require(
@@ -482,7 +483,7 @@ contract OVM_L1StandardBridge is iOVM_L1StandardBridge, OVM_CrossDomainEnabled {
     }
 
     function _claimFastWithdrawalETH (uint256 _amount) internal {
-        (bool success, ) = msg.sender.call{value: amount}(new bytes(0));
+        (bool success, ) = msg.sender.call{value: _amount}(new bytes(0));
 
         require(success, "TransferHelper::safeTransferETH: ETH transfer failed");
     }

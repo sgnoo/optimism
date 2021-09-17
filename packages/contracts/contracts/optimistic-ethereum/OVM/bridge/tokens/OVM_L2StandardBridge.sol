@@ -242,7 +242,7 @@ contract OVM_L2StandardBridge is iOVM_L2ERC20Bridge, OVM_CrossDomainEnabled {
                         _fee,
                         _deadline,
                         _nonce,
-                        block.number,
+                        block.number, // l2txindex
                         _data
                     );
         } else {

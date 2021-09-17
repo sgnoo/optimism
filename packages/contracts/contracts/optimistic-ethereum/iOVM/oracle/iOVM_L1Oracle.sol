@@ -24,4 +24,7 @@ interface iOVM_L1Oracle {
         Lib_OVMCodec.ChainInclusionProof memory _inclusionProof
     )
         external;
+
+    // TODO: check
+    function ovmL1ClaimableERC721 () public returns (address);
 }
