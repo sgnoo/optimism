@@ -443,10 +443,10 @@ contract OVM_L1StandardBridge is iOVM_L1StandardBridge, OVM_CrossDomainEnabled {
     // TODO: param tokenId? _nonce?
     function claimFastWithdrawal (uint256 _nonce) external {
         // TODO: token naming.
-        // iOVM_L1ClaimableERC721 ovmL1ClaimableERC721 = iOVM_L1Oracle(l1Oracle).ovmL1ClaimableERC721();
-        // require(
-        //     ovmL1ClaimableERC721.ownerOf(_nonce) == msg.sender, ""
-        // );
+        iOVM_L1ClaimableERC721 ovmL1ClaimableERC721 = iOVM_L1Oracle(l1Oracle).ovmL1ClaimableERC721();
+        require(
+            ovmL1ClaimableERC721.ownerOf(_nonce) == msg.sender, ""
+        );
 
         FastWithdrawal storage fastWithdrawal = fastWithdrawals[_nonce];
         require(
