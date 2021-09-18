@@ -7,6 +7,8 @@ pragma experimental ABIEncoderV2;
 import { iOVM_L1StandardBridge } from "../../../iOVM/bridge/tokens/iOVM_L1StandardBridge.sol";
 import { iOVM_L1ERC20Bridge } from "../../../iOVM/bridge/tokens/iOVM_L1ERC20Bridge.sol";
 import { iOVM_L2ERC20Bridge } from "../../../iOVM/bridge/tokens/iOVM_L2ERC20Bridge.sol";
+import { iOVM_L1Oracle } from "../../../iOVM/oracle/iOVM_L1Oracle.sol";
+import { iOVM_L1ClaimableERC721 } from "../../../iOVM/oracle/iOVM_L1ClaimableERC721.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 /* Library Imports */
@@ -34,9 +36,12 @@ contract OVM_L1StandardBridge is iOVM_L1StandardBridge, OVM_CrossDomainEnabled {
      ********************************/
 
     address public l2TokenBridge;
+    address public l1Oracle;
 
     // Maps L1 token to L2 token to balance of the L1 token deposited
     mapping(address => mapping (address => uint256)) public deposits;
+    // Maps fast withdrawal nonce to information of fast withdrawal.
+    mapping(uint256 => FastWithdrawal) public fastWithdrawals;
 
     /***************
      * Constructor *
@@ -54,16 +59,20 @@ contract OVM_L1StandardBridge is iOVM_L1StandardBridge, OVM_CrossDomainEnabled {
     /**
      * @param _l1messenger L1 Messenger address being used for cross-chain communications.
      * @param _l2TokenBridge L2 standard bridge address.
+     * @param _l1Oracle
      */
     function initialize(
         address _l1messenger,
-        address _l2TokenBridge
+        address _l2TokenBridge,
+        address _l1Oracle
     )
         public
     {
         require(messenger == address(0), "Contract has already been initialized.");
-        messenger = _l1messenger;
+
+        messenger     = _l1messenger;
         l2TokenBridge = _l2TokenBridge;
+        l1Oracle      = _l1Oracle;
     }
 
     /**************
@@ -315,6 +324,180 @@ contract OVM_L1StandardBridge is iOVM_L1StandardBridge, OVM_CrossDomainEnabled {
         IERC20(_l1Token).safeTransfer(_to, _amount);
 
         emit ERC20WithdrawalFinalized(_l1Token, _l2Token, _from, _to, _amount, _data);
+    }
+
+     /**
+     * @inheritdoc iOVM_L1StandardBridge
+     */
+    function finalizeETHFastWithdrawal(
+        address _from,
+        address _to,
+        uint256 _amount,
+        uint256 _fee,
+        uint256 _deadline,
+        uint256 _nonce,
+        uint256 _l2TxIndex,
+        bytes calldata _data
+    )
+        external
+        override
+        onlyFromCrossDomainAccount(l2TokenBridge)
+    {
+        FastWithdrawal storage fastWithdrawal = fastWithdrawals[_nonce];
+        if (fastWithdrawal.status == FastWithdrawalStatus.REVERTED) {
+            uint256 amount = _amount.add(_fee);
+            (bool success, ) = _to.call{value: amount}(new bytes(0));
+
+            require(success, "TransferHelper::safeTransferETH: ETH transfer failed");
+            // TODO: which event should be emitted? ETHWithdrawalFinalized or ETHFastWithdrawalFinalized.
+            //       I think it betters to use ETHFastWithdrawalFinalized including fast withdrawal success or failure.
+        } else if (fastWithdrawal.status == FastWithdrawalStatus.PROCESSED) {
+            fastWithdrawal.isETH = true;
+            fastWithdrawal.amount = _amount.add(_fee);
+            fastWithdrawal.l2TxIndex = _l2TxIndex;
+            fastWithdrawal.status = FastWithdrawalStatus.CLAIMABLE;
+        }
+
+        // TODO: modify event params.
+        emit ETHFastWithdrawalFinalized(_from, _to, _amount, _data);
+    }
+
+    /**
+     * @inheritdoc iOVM_L1ERC20Bridge
+     */
+    function finalizeERC20FastWithdrawal(
+        address _l1Token,
+        address _l2Token,
+        address _from,
+        address _to,
+        uint256 _amount,
+        uint256 _fee,
+        uint256 _deadline,
+        uint256 _nonce,
+        uint256 _l2TxIndex, // TODO: naming
+        bytes calldata _data
+    )
+        external
+        override
+        onlyFromCrossDomainAccount(l2TokenBridge)
+    {
+        FastWithdrawal storage fastWithdrawal = fastWithdrawals[_nonce];
+
+        if (fastWithdrawal.status == FastWithdrawalStatus.REVERTED) {
+            uint256 amount = _amount.add(_fee);
+            deposits[_l1Token][_l2Token] = deposits[_l1Token][_l2Token].sub(amount);
+
+            // When a withdrawal is finalized on L1, the L1 Bridge transfers the funds to the withdrawer
+            IERC20(_l1Token).safeTransfer(_to, amount);
+        } else if (fastWithdrawal.status == FastWithdrawalStatus.PROCESSED) {
+            fastWithdrawal.l1Token = _l1Token;
+            fastWithdrawal.l2Token = _l2Token;
+            fastWithdrawal.amount = _amount.add(_fee);
+            fastWithdrawal.l2TxIndex = _l2TxIndex;
+            fastWithdrawal.status = FastWithdrawalStatus.CLAIMABLE;
+        }
+
+        // TODO: make return types? this event should not be emitted, if it is in the `else` condition.
+        emit ERC20FastWithdrawalFinalized(
+            _l1Token,
+            _l2Token,
+            _from,
+            _to,
+            _amount,
+            _data
+        );
+    }
+
+    // TODO: need better function naming?
+    function processFastWithdrawal(uint256 _nonce)
+        external
+        returns (bool)
+    {
+        require(
+            msg.sender == l1Oracle,
+            "Only OVM_Oracle can process fast withdrawal."
+        );
+
+        FastWithdrawal storage fastWithdrawal = fastWithdrawals[_nonce];
+
+        // TODO: also need to check l2TxIndex? because of this sentence, we don't have to set `l2TxIndex = 0;`
+        require(
+            fastWithdrawal.l2TxIndex == 0 && fastWithdrawal.amount == 0,
+            "Provided fast withdrawal has already been processed."
+        );
+        // TODO: we can put fastWithdrawal.status == FastWithdrawalStatus.REVERTED, but it could be confusing.
+        require(
+            fastWithdrawal.status != FastWithdrawalStatus.PROCESSED &&
+            fastWithdrawal.status != FastWithdrawalStatus.CLAIMABLE &&
+            fastWithdrawal.status != FastWithdrawalStatus.CLAIMED &&
+            fastWithdrawal.status != FastWithdrawalStatus.CHALLENGED,
+            "Provided fast withdrawal has already been processed."
+        );
+
+        fastWithdrawal.status = FastWithdrawalStatus.PROCESSED;
+        // TODO: need return type?
+
+        return true;
+    }
+
+    // TODO: param tokenId? _nonce?
+    function claimFastWithdrawal (uint256 _nonce) external {
+        // TODO: token naming.
+        iOVM_L1ClaimableERC721 ovmL1ClaimableERC721 = iOVM_L1Oracle(l1Oracle).ovmL1ClaimableERC721();
+        require(
+            ovmL1ClaimableERC721.ownerOf(_nonce) == msg.sender, ""
+        );
+
+        FastWithdrawal storage fastWithdrawal = fastWithdrawals[_nonce];
+        require(
+            fastWithdrawal.status == FastWithdrawalStatus.CLAIMABLE, ""
+        );
+
+        // TODO: need this require statement?
+        require(
+            fastWithdrawal.l1Token != address(0) &&
+            fastWithdrawal.l2Token != address(0),
+            ""
+        );
+        // TODO: need this require statement?
+        require(fastWithdrawal.amount > 0, "");
+
+        // TODO: any other good code?
+        if (fastWithdrawal.isETH) {
+            _claimFastWithdrawalETH(fastWithdrawal.amount);
+
+            emit FastWithdrawalETHClaimed();
+        } else {
+            _claimFastWithdrawalERC20(
+                fastWithdrawal.l1Token,
+                fastWithdrawal.l2Token,
+                fastWithdrawal.amount
+            );
+
+            emit FastWithdrawalERC20Claimed();
+        }
+        fastWithdrawal.status = FastWithdrawalStatus.CLAIMED;
+
+        // TODO: burn fToken
+        // There is no need to burn fToken, because we have to check challenge posibility after DTD.
+    }
+
+    function _claimFastWithdrawalETH (uint256 _amount) internal {
+        (bool success, ) = msg.sender.call{value: _amount}(new bytes(0));
+
+        require(success, "TransferHelper::safeTransferETH: ETH transfer failed");
+    }
+
+    function _claimFastWithdrawalERC20 (
+        address _l1Token,
+        address _l2Token,
+        uint256 _amount
+    )
+        internal
+    {
+        deposits[_l1Token][_l2Token] = deposits[_l1Token][_l2Token].sub(_amount);
+
+        IERC20(_l1Token).safeTransfer(msg.sender, _amount);
     }
 
     /*****************************

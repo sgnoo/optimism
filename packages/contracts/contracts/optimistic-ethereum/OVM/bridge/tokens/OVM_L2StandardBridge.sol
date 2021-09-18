@@ -15,6 +15,9 @@ import { Lib_PredeployAddresses } from "../../../libraries/constants/Lib_Predepl
 /* Contract Imports */
 import { IL2StandardERC20 } from "../../../libraries/standards/IL2StandardERC20.sol";
 
+/* External Imports */
+import { SafeMath } from "@openzeppelin/contracts/math/SafeMath.sol";
+
 /**
  * @title OVM_L2StandardBridge
  * @dev The L2 Standard bridge is a contract which works together with the L1 Standard bridge to
@@ -34,6 +37,9 @@ contract OVM_L2StandardBridge is iOVM_L2ERC20Bridge, OVM_CrossDomainEnabled {
      ********************************/
 
     address public l1TokenBridge;
+
+    // TODO: check naming
+    uint256 public fastWithdrawalNonce;
 
     /***************
      * Constructor *
@@ -161,6 +167,119 @@ contract OVM_L2StandardBridge is iOVM_L2ERC20Bridge, OVM_CrossDomainEnabled {
         );
 
         emit WithdrawalInitiated(l1Token, _l2Token, msg.sender, _to, _amount, _data);
+    }
+
+    /**
+     * @inheritdoc iOVM_L2ERC20Bridge
+     */
+    function fastWithdraw(
+        address _l1Token,
+        address _l2Token,
+        address _to,
+        uint256 _amount,
+        uint256 _fee,
+        uint256 _deadline,
+        uint256 _nonce,
+        uint32 _l1Gas,
+        bytes calldata _data
+    )
+        external
+        override
+        virtual
+    {
+        _initiateFastWithdrawal(
+            _l1Token,
+            _l2Token,
+            msg.sender,
+            _to,
+            _amount,
+            _fee,
+            _deadline,
+            _nonce,
+            _l1Gas,
+            _data
+        );
+    }
+
+    function _initiateFastWithdrawal(
+        address _l1Token,
+        address _l2Token,
+        address _from,
+        address _to,
+        uint256 _amount,
+        uint256 _fee,
+        uint256 _deadline,
+        uint256 _nonce,
+        uint32 _l1Gas,
+        bytes calldata _data
+    )
+        internal
+    {
+        require(
+            _nonce == fastWithdrawalNonce,
+            "Actual nonce for fast withdrawal does not match expected nonce."
+        );
+
+        // When a withdrawal is initiated, we burn the withdrawer's funds to prevent subsequent L2
+        // usage
+        uint256 amount = SafeMath.add(_amount, _fee);
+        IL2StandardERC20(_l2Token).burn(msg.sender, amount);
+
+        address l1Token = IL2StandardERC20(_l2Token).l1Token();
+        require(
+            _l1Token == l1Token,
+            "Actual l1 token address does not match expected address."
+        );
+
+        // Construct calldata for l1TokenBridge.finalizeERC20Withdrawal(_to, _amount)
+        bytes memory message;
+        if (_l2Token == Lib_PredeployAddresses.OVM_ETH) {
+            message = abi.encodeWithSelector(
+                        iOVM_L1StandardBridge.finalizeETHFastWithdrawal.selector,
+                        _from,
+                        _to,
+                        _amount,
+                        _fee,
+                        _deadline,
+                        _nonce,
+                        block.number, // l2txindex
+                        _data
+                    );
+        } else {
+            message = abi.encodeWithSelector(
+                        iOVM_L1ERC20Bridge.finalizeERC20FastWithdrawal.selector,
+                        _l1Token,
+                        _l2Token,
+                        _from,
+                        _to,
+                        _fee,
+                        _deadline,
+                        _nonce,
+                        block.number,
+                        _data
+                    );
+        }
+
+        fastWithdrawalNonce += 1;
+
+        // Send message up to L1 bridge
+        sendCrossDomainMessage(
+            l1TokenBridge,
+            _l1Gas,
+            message
+        );
+
+        emit FastWithdrawalInitiated(
+            _l1Token,
+            _l2Token,
+            msg.sender,
+            _to,
+            _amount,
+            _fee,
+            _deadline,
+            _nonce,
+            _data
+        );
     }
 
     /************************************

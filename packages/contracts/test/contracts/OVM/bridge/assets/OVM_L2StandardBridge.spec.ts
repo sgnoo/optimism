@@ -225,6 +225,7 @@ describe('OVM_L2StandardBridge', () => {
       )
       const withdrawalCallToMessenger =
         Mock__OVM_L2CrossDomainMessenger.smocked.sendMessage.calls[0]
+      console.log('withdrawalCallToMessenger', withdrawalCallToMessenger);
 
       // Assert Alice's balance went down
       const aliceBalance = await SmoddedL2Token.balanceOf(
